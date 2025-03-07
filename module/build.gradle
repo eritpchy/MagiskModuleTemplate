@@ -20,7 +20,8 @@ android {
                         "-DRIRU_MODULE_API_VERSION=$moduleRiruApiVersion",
                         "-DRIRU_MODULE_VERSION=$moduleVersionCode",
                         "-DRIRU_MODULE_VERSION_NAME:STRING=$moduleVersion",
-                        "-DRIRU_MODULE_MIN_API_VERSION=$moduleMinRiruApiVersion"
+                        "-DRIRU_MODULE_MIN_API_VERSION=$moduleMinRiruApiVersion",
+                        "-DRESOURCE_BIN:STRING=$moduleResourcePath"
             }
         }
         namespace("com.example.app")
@@ -118,7 +119,11 @@ afterEvaluate {
         task("flash${variantCapped}", type: Exec) {
             dependsOn("push${variantCapped}")
             commandLine android.adbExecutable, "shell", "su", "-c",
-                    "magisk --install-module /data/local/tmp/${zipName}"
+            """"if command -v magisk >/dev/null 2>&1; then
+                magisk --install-module \"/data/local/tmp/${zipName}\"
+            else
+                apd module install \"/data/local/tmp/${zipName}\"
+            fi" """
         }
 
         task("flashAndReboot${variantCapped}", type: Exec) {

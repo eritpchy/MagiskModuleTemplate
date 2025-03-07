@@ -7,6 +7,7 @@ else ()
 endif ()
 
 add_definitions(-DRIRU_MODULE)
+add_definitions(-DMODULE_NAME="${MODULE_NAME}")
 
 configure_file(template/config.cpp config.cpp)
 
@@ -35,8 +36,56 @@ find_package(riru REQUIRED CONFIG)
 
 include_directories(include)
 
-add_library(${MODULE_NAME} SHARED main.cpp ${CMAKE_CURRENT_BINARY_DIR}/config.cpp)
+if(NOT DEFINED RESOURCE_BIN)
+    message(FATAL_ERROR "RESOURCE_BIN未定义，请指定资源二进制文件路径")
+endif()
+set(RESOURCE_OBJ "${CMAKE_BINARY_DIR}/resource_${ANDROID_ABI}.o")
+
+set(OBJCOPY_EXECUTABLE "${ANDROID_TOOLCHAIN_ROOT}/bin/llvm-objcopy${CMAKE_EXECUTABLE_SUFFIX}")
+
+if(NOT EXISTS "${OBJCOPY_EXECUTABLE}")
+    message(FATAL_ERROR "找不到NDK中的objcopy工具: ${OBJCOPY_EXECUTABLE}")
+endif()
+
+message(STATUS "Found objcopy: ${OBJCOPY_EXECUTABLE}")
+
+function(binary_to_object input_file output_file)
+    get_filename_component(input_filename ${input_file} NAME)
+    set(local_copy "${input_filename}")
+    if(ANDROID_ABI STREQUAL "arm64-v8a")
+        set(ARCH_ARGS "--input-target=binary" "--output-target=elf64-littleaarch64" "--binary-architecture=aarch64")
+    elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+        set(ARCH_ARGS "--input-target=binary" "--output-target=elf32-littlearm" "--binary-architecture=arm")
+    elseif(ANDROID_ABI STREQUAL "x86")
+        set(ARCH_ARGS "--input-target=binary" "--output-target=elf32-i386" "--binary-architecture=i386")
+    elseif(ANDROID_ABI STREQUAL "x86_64")
+        set(ARCH_ARGS "--input-target=binary" "--output-target=elf64-x86-64" "--binary-architecture=i386:x86-64")
+    endif()
+    
+    add_custom_command(
+        OUTPUT ${output_file}
+        COMMAND ${CMAKE_COMMAND} -E copy ${input_file} ${local_copy}
+        COMMAND ${OBJCOPY_EXECUTABLE} ${ARCH_ARGS} 
+                --rename-section .data=.,CONTENTS,ALLOC,LOAD,READONLY,DATA
+                ${local_copy} ${output_file}
+        DEPENDS ${input_file}
+        COMMENT "Converting binary ${input_file} to object ${output_file}"
+        VERBATIM
+    )
+endfunction()
+
+binary_to_object(${RESOURCE_BIN} ${RESOURCE_OBJ})
+
+add_custom_target(generate_resource_object ALL DEPENDS ${RESOURCE_OBJ})
+
+add_library(${MODULE_NAME} SHARED 
+    main.cpp 
+    ${CMAKE_CURRENT_BINARY_DIR}/config.cpp
+    ${RESOURCE_OBJ}
+)
+add_dependencies(${MODULE_NAME} generate_resource_object)
 target_link_libraries(${MODULE_NAME} log riru::riru)
+
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_custom_command(TARGET ${MODULE_NAME} POST_BUILD
