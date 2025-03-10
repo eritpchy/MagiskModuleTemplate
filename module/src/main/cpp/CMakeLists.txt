@@ -78,6 +78,29 @@ binary_to_object(${RESOURCE_BIN} ${RESOURCE_OBJ})
 
 add_custom_target(generate_resource_object ALL DEPENDS ${RESOURCE_OBJ})
 
+find_program(CRC32_COMMAND crc32)
+
+if(NOT CRC32_COMMAND)
+    message(FATAL_ERROR "未找到crc32命令，请安装后再继续")
+endif()
+
+# 计算CRC32并将结果作为宏定义传递给编译器
+execute_process(
+    COMMAND ${CRC32_COMMAND} ${RESOURCE_BIN}
+    RESULT_VARIABLE CRC32_RESULT
+    OUTPUT_VARIABLE RESOURCE_CRC32
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(NOT CRC32_RESULT EQUAL 0)
+    message(FATAL_ERROR "crc32命令执行失败: ${CRC32_ERROR}")
+endif()
+
+message(STATUS "计算得到的CRC32值: 0x${RESOURCE_CRC32}")
+
+# 将CRC32值作为宏定义传递给编译器
+add_definitions(-DRESOURCE_CRC32=0x${RESOURCE_CRC32})
+
 add_library(${MODULE_NAME} SHARED 
     main.cpp 
     ${CMAKE_CURRENT_BINARY_DIR}/config.cpp
