@@ -123,7 +123,8 @@ afterEvaluate {
                 magisk --install-module \"/data/local/tmp/${zipName}\"
             else
                 apd module install \"/data/local/tmp/${zipName}\"
-            fi" """
+            fi;
+            rm -fv \"/data/local/tmp/${zipName}\"" """
         }
 
         task("flashAndReboot${variantCapped}", type: Exec) {
